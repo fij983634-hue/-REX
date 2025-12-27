@@ -1,0 +1,151 @@
+-- [[ 🇹🇭🌈 MARCH CYBER FULL - เปลี่ยนปุ่มเปิดเป็นรูปภาพ ID 84769004389869 🌈🇹🇭 ]] --
+
+local Players = game:GetService("Players")
+local Market = game:GetService("MarketplaceService")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+
+-- ล้าง UI เก่า
+for _, v in pairs(LocalPlayer.PlayerGui:GetChildren()) do
+    if v.Name == "MarchFullHub" then v:Destroy() end
+end
+
+local ScreenGui = Instance.new("ScreenGui", LocalPlayer.PlayerGui)
+ScreenGui.Name = "MarchFullHub"
+ScreenGui.ResetOnSpawn = false
+
+-- [ ฟังก์ชันเช็คไอดี ] --
+local function GetInfo(id)
+    local nId = tonumber(id)
+    if not nId or nId < 100 then return nil end
+    local success, info = pcall(function() return Market:GetProductInfo(nId) end)
+    if success and info and info.AssetType == Enum.AssetType.Audio then
+        return info.Name, info.Creator.Name
+    end
+    return nil
+end
+
+-- [ ปุ่มเปิด/ปิด (เปลี่ยนเป็น ImageButton) ] --
+local ToggleBtn = Instance.new("ImageButton", ScreenGui) -- เปลี่ยนจาก TextButton เป็น ImageButton
+ToggleBtn.Size = UDim2.new(0, 45, 0, 45); ToggleBtn.Position = UDim2.new(0.02, 0, 0.4, 0)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(10, 10, 10);
+ToggleBtn.Image = "rbxassetid://84769004389869" -- ใช้ภาพ ID 84769004389869
+ToggleBtn.ImageTransparency = 0
+Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(1, 0)
+local tStroke = Instance.new("UIStroke", ToggleBtn); tStroke.Thickness = 2
+
+-- [ หน้าต่างหลัก ] --
+local Main = Instance.new("Frame", ScreenGui)
+Main.Size = UDim2.new(0, 520, 0, 380); Main.Position = UDim2.new(0.5, -260, 0.5, -190)
+Main.BackgroundColor3 = Color3.fromRGB(5, 5, 5); Main.Active = true; Main.Draggable = true
+Instance.new("UICorner", Main)
+local mStroke = Instance.new("UIStroke", Main); mStroke.Thickness = 2.5
+
+ToggleBtn.MouseButton1Click:Connect(function() Main.Visible = not Main.Visible end)
+
+-- [ แถบเมนู Tab ] --
+local TabFrame = Instance.new("Frame", Main)
+TabFrame.Size = UDim2.new(1, -30, 0, 35); TabFrame.Position = UDim2.new(0, 15, 0, 15); TabFrame.BackgroundTransparency = 1
+
+local Tab1Btn = Instance.new("TextButton", TabFrame)
+Tab1Btn.Size = UDim2.new(0.49, 0, 1, 0); Tab1Btn.Text = "ดึงไอดีคน"; Tab1Btn.Font = Enum.Font.GothamBold; Tab1Btn.TextSize = 12
+Tab1Btn.BackgroundColor3 = Color3.new(1,1,1); Tab1Btn.TextColor3 = Color3.new(0,0,0); Instance.new("UICorner", Tab1Btn)
+
+local Tab2Btn = Instance.new("TextButton", TabFrame)
+Tab2Btn.Size = UDim2.new(0.49, 0, 1, 0); Tab2Btn.Position = UDim2.new(0.51, 0, 0, 0); Tab2Btn.Text = "รายการเพลงทั้งหมด"; Tab2Btn.Font = Enum.Font.GothamBold; Tab2Btn.TextSize = 11
+Tab2Btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30); Tab2Btn.TextColor3 = Color3.new(1,1,1); Instance.new("UICorner", Tab2Btn)
+
+-- [[ หน้าแรก: ดึงไอดีคน ]] --
+local Page1 = Instance.new("Frame", Main)
+Page1.Size = UDim2.new(1, -30, 1, -75); Page1.Position = UDim2.new(0, 15, 0, 60); Page1.BackgroundTransparency = 1
+
+local AlbumArt = Instance.new("ImageLabel", Page1)
+AlbumArt.Size = UDim2.new(0, 140, 0, 140); AlbumArt.Image = "rbxassetid://13847421375"
+AlbumArt.BackgroundColor3 = Color3.new(0,0,0); Instance.new("UICorner", AlbumArt)
+Instance.new("UIStroke", AlbumArt).Color = Color3.new(1,1,1)
+
+local InfoTxt = Instance.new("TextLabel", Page1)
+InfoTxt.Size = UDim2.new(0.4, 0, 0.35, 0); InfoTxt.Position = UDim2.new(0, 5, 0.45, 5)
+InfoTxt.Text = "สถานะ: รอเลือกผู้เล่น..."; InfoTxt.TextColor3 = Color3.new(1,1,1); InfoTxt.TextSize = 11; InfoTxt.Font = Enum.Font.GothamBold; InfoTxt.BackgroundTransparency = 1; InfoTxt.TextXAlignment = 0; InfoTxt.TextYAlignment = 0
+
+local IDShow = Instance.new("TextBox", Page1)
+IDShow.Size = UDim2.new(0.38, 0, 0.08, 0); IDShow.Position = UDim2.new(0, 0, 0.82, 0); IDShow.PlaceholderText = "ไอดีจะขึ้นตรงนี้"; IDShow.Text = ""
+IDShow.BackgroundColor3 = Color3.fromRGB(20, 20, 20); IDShow.TextColor3 = Color3.new(1,1,1); IDShow.TextSize = 12; IDShow.Font = Enum.Font.Code; Instance.new("UICorner", IDShow)
+
+local CopyBtn = Instance.new("TextButton", Page1)
+CopyBtn.Size = UDim2.new(0.18, 0, 0.08, 0); CopyBtn.Position = UDim2.new(0, 0, 0.92, 0); CopyBtn.Text = "คัดลอก"; CopyBtn.BackgroundColor3 = Color3.new(1,1,1); CopyBtn.TextColor3 = Color3.new(0,0,0); CopyBtn.TextSize = 10; CopyBtn.Font = Enum.Font.GothamBold; Instance.new("UICorner", CopyBtn)
+
+local ResetBtn = Instance.new("TextButton", Page1)
+ResetBtn.Size = UDim2.new(0.18, 0, 0.08, 0); ResetBtn.Position = UDim2.new(0.2, 0, 0.92, 0); ResetBtn.Text = "รีเซ็ต"; ResetBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0); ResetBtn.TextColor3 = Color3.new(1,1,1); ResetBtn.TextSize = 10; ResetBtn.Font = Enum.Font.GothamBold; Instance.new("UICorner", ResetBtn)
+
+local ListScroll = Instance.new("ScrollingFrame", Page1)
+ListScroll.Size = UDim2.new(0.55, 0, 1, 0); ListScroll.Position = UDim2.new(0.45, 0, 0, 0); ListScroll.BackgroundTransparency = 1; ListScroll.ScrollBarThickness = 2
+Instance.new("UIListLayout", ListScroll).Padding = UDim.new(0, 5)
+
+-- [[ หน้าสอง: รายการเพลงทั้งหมด ]] --
+local Page2 = Instance.new("Frame", Main)
+Page2.Size = UDim2.new(1, -30, 1, -75); Page2.Position = UDim2.new(0, 15, 0, 60); Page2.BackgroundTransparency = 1; Page2.Visible = false
+
+local ScanScroll = Instance.new("ScrollingFrame", Page2)
+ScanScroll.Size = UDim2.new(1, 0, 0.85, 0); ScanScroll.BackgroundTransparency = 1; ScanScroll.ScrollBarThickness = 2
+Instance.new("UIListLayout", ScanScroll).Padding = UDim.new(0, 6)
+
+local ScanBtn = Instance.new("TextButton", Page2)
+ScanBtn.Size = UDim2.new(0, 200, 0, 30); ScanBtn.Position = UDim2.new(0.5, -100, 0.9, 0); ScanBtn.Text = "สแกนหาเพลงทั้งหมด"; ScanBtn.BackgroundColor3 = Color3.new(1,1,1); ScanBtn.TextColor3 = Color3.new(0,0,0); ScanBtn.TextSize = 10; ScanBtn.Font = Enum.Font.GothamBold; Instance.new("UICorner", ScanBtn)
+
+-- [ การทำงาน ] --
+local function ShowData(sid)
+    local name, creator = GetInfo(sid)
+    if name then
+        InfoTxt.Text = "ชื่อเพลง: "..name.."\nคนสร้าง: "..creator.."\nไอดี: "..sid
+        AlbumArt.Image = "rbxthumb://type=Asset&id="..sid.."&w=150&h=150"
+        IDShow.Text = sid
+    end
+end
+
+CopyBtn.MouseButton1Click:Connect(function()
+    if IDShow.Text ~= "" then setclipboard(IDShow.Text) end
+end)
+
+ResetBtn.MouseButton1Click:Connect(function()
+    IDShow.Text = ""; InfoTxt.Text = "สถานะ: รีเซ็ตแล้ว..."; AlbumArt.Image = "rbxassetid://13847421375"
+end)
+
+local function RefreshPlayers()
+    for _, v in pairs(ListScroll:GetChildren()) do if v:IsA("TextButton") then v:Destroy() end end
+    for _, p in pairs(Players:GetPlayers()) do
+        local b = Instance.new("TextButton", ListScroll)
+        b.Size = UDim2.new(1, -5, 0, 30); b.BackgroundColor3 = Color3.fromRGB(20, 20, 20); b.TextColor3 = Color3.new(1,1,1); b.TextSize = 10; b.Text = "  👤 "..p.DisplayName; b.TextXAlignment = 0; b.Font = Enum.Font.Gotham; Instance.new("UICorner", b)
+        b.MouseButton1Click:Connect(function()
+            local sid = nil
+            if p.Character then for _, sound in pairs(p.Character:GetDescendants()) do if sound:IsA("Sound") and sound.Playing and sound.SoundId:match("%d+") then sid = sound.SoundId:match("%d+") end end end
+            if sid and tonumber(sid) > 100 then ShowData(sid) else InfoTxt.Text = "ผู้เล่น: "..p.DisplayName.."\nสถานะ: ไม่พบเพลง"; AlbumArt.Image = "rbxassetid://13847421375"; IDShow.Text = "" end
+        end)
+    end
+end
+
+ScanBtn.MouseButton1Click:Connect(function()
+    for _, v in pairs(ScanScroll:GetChildren()) do if v:IsA("Frame") then v:Destroy() end end
+    for _, p in pairs(Players:GetPlayers()) do
+        local sid = nil
+        if p.Character then for _, sound in pairs(p.Character:GetDescendants()) do if sound:IsA("Sound") and sound.Playing and sound.SoundId:match("%d+") then sid = sound.SoundId:match("%d+") end end end
+        if sid and tonumber(sid) > 100 then
+            local name, creator = GetInfo(sid)
+            if name then
+                local f = Instance.new("Frame", ScanScroll); f.Size = UDim2.new(1, -10, 0, 45); f.BackgroundColor3 = Color3.fromRGB(20, 20, 20); Instance.new("UICorner", f)
+                local img = Instance.new("ImageLabel", f); img.Size = UDim2.new(0, 35, 0, 35); img.Position = UDim2.new(0, 5, 0.5, -17.5); img.Image = "rbxthumb://type=Asset&id="..sid.."&w=150&h=150"; Instance.new("UICorner", img)
+                local t = Instance.new("TextLabel", f); t.Size = UDim2.new(0.6, 0, 1, 0); t.Position = UDim2.new(0, 45, 0, 0); t.Text = "สร้างโดย: "..creator.."\nเพลง: "..name; t.TextColor3 = Color3.new(1,1,1); t.TextSize = 9; t.BackgroundTransparency = 1; t.TextXAlignment = 0; t.Font = Enum.Font.GothamBold
+                local c = Instance.new("TextButton", f); c.Size = UDim2.new(0.2, 0, 0.6, 0); c.Position = UDim2.new(0.78, 0, 0.2, 0); c.Text = "คัดลอก"; c.BackgroundColor3 = Color3.new(1,1,1); c.TextColor3 = Color3.new(0,0,0); c.TextSize = 9; c.Font = Enum.Font.GothamBold; Instance.new("UICorner", c)
+                c.MouseButton1Click:Connect(function() setclipboard(sid) end)
+            end
+        end
+    end
+end)
+
+-- [ ระบบสลับหน้า ] --
+Tab1Btn.MouseButton1Click:Connect(function() Page1.Visible = true; Page2.Visible = false; Tab1Btn.BackgroundColor3 = Color3.new(1,1,1); Tab1Btn.TextColor3 = Color3.new(0,0,0); Tab2Btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30); Tab2Btn.TextColor3 = Color3.new(1,1,1) end)
+Tab2Btn.MouseButton1Click:Connect(function() Page1.Visible = false; Page2.Visible = true; Tab2Btn.BackgroundColor3 = Color3.new(1,1,1); Tab2Btn.TextColor3 = Color3.new(0,0,0); Tab1Btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30); Tab1Btn.TextColor3 = Color3.new(1,1,1) end)
+
+-- [ ระบบ RGB ] --
+RunService.RenderStepped:Connect(function() local c = Color3.fromHSV(tick() * 0.4 % 1, 0.7, 1); tStroke.Color = c; mStroke.Color = c end)
+RefreshPlayers(); Players.PlayerAdded:Connect(RefreshPlayers); Players.PlayerRemoving:Connect(RefreshPlayers)
