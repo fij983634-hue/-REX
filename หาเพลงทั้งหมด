@@ -1,0 +1,533 @@
+--[[
+    Modern UI Music ID Grabber v2.2 (Final Copy Fix)
+    อัปเดต: 
+    - เพิ่มระบบ Auto Copy (setclipboard) สำหรับ Executor
+    - ถ้า Auto Copy ไม่ได้ จะไฮไลท์ให้กด Ctrl+C แทน
+    - คัดลอกได้ทั้ง ID และ ชื่อเพลง
+]]
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local MarketplaceService = game:GetService("MarketplaceService")
+local ContentProvider = game:GetService("ContentProvider")
+local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Lighting = game:GetService("Lighting")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+-- // 1. สร้าง ScreenGui หลัก //
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "MusicGrabberUI_v2_2"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = PlayerGui
+
+-- // 2. การตั้งค่า UI (Config) //
+local COLORS = {
+    Background = Color3.fromRGB(15, 23, 42),      -- พื้นหลังน้ำเงินเข้ม
+    Sidebar = Color3.fromRGB(30, 41, 59),         -- สีแถบหัวข้อ
+    Accent = Color3.fromRGB(99, 102, 241),        -- สีม่วง Indigo
+    Success = Color3.fromRGB(34, 197, 94),        -- สีเขียว (Play/Active)
+    Stop = Color3.fromRGB(239, 68, 68),           -- สีแดง (Stop)
+    Text = Color3.fromRGB(226, 232, 240),
+    TextDim = Color3.fromRGB(148, 163, 184),
+    ItemBG = Color3.fromRGB(51, 65, 85)
+}
+
+-- ตัวแปรระบบ
+local currentPreviewSound = nil
+local isScanning = false
+
+-- // 3. ฟังก์ชัน Helper สร้างมุมโค้ง //
+local function AddCorner(parent, radius)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, radius or 12)
+    corner.Parent = parent
+    return corner
+end
+
+-- // ฟังก์ชันช่วย Copy (Auto detect) //
+local function SmartCopy(text)
+    -- พยายามใช้ setclipboard หรือ toclipboard (มักมีใน Executor)
+    if setclipboard then
+        setclipboard(text)
+        return true
+    elseif toclipboard then
+        toclipboard(text)
+        return true
+    end
+    return false -- ถ้าทำไม่ได้ ให้ return false ไปใช้วิธี Manual
+end
+
+-- // 4. สร้างปุ่มเปิดเมนู (Open Button) //
+local OpenBtn = Instance.new("TextButton")
+OpenBtn.Name = "OpenButton"
+OpenBtn.Text = "REX"
+OpenBtn.Font = Enum.Font.GothamBlack
+OpenBtn.TextSize = 14
+OpenBtn.Size = UDim2.new(0, 120, 0, 40)
+OpenBtn.Position = UDim2.new(0, 20, 0, 20)
+OpenBtn.BackgroundColor3 = COLORS.Accent
+OpenBtn.TextColor3 = Color3.new(1,1,1)
+OpenBtn.Visible = false 
+OpenBtn.Parent = ScreenGui
+AddCorner(OpenBtn, 8)
+
+-- // 5. สร้าง Main Frame (หน้าต่างหลัก) //
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 600, 0, 450)
+MainFrame.Position = UDim2.new(0.5, -300, 0.5, -225)
+MainFrame.BackgroundColor3 = COLORS.Background
+MainFrame.BorderSizePixel = 0
+MainFrame.ClipsDescendants = true
+MainFrame.Parent = ScreenGui
+AddCorner(MainFrame, 16)
+
+local Stroke = Instance.new("UIStroke")
+Stroke.Color = Color3.fromRGB(255, 255, 255)
+Stroke.Transparency = 0.9
+Stroke.Thickness = 1
+Stroke.Parent = MainFrame
+
+-- ฟังก์ชันสลับเมนู
+local function ToggleMenu()
+    if MainFrame.Visible then
+        MainFrame:TweenSize(UDim2.new(0, 0, 0, 0), Enum.EasingDirection.In, Enum.EasingStyle.Quad, 0.2, true, function()
+            MainFrame.Visible = false
+            OpenBtn.Visible = true
+        end)
+    else
+        OpenBtn.Visible = false
+        MainFrame.Visible = true
+        MainFrame:TweenSize(UDim2.new(0, 600, 0, 450), Enum.EasingDirection.Out, Enum.EasingStyle.Back, 0.3, true)
+    end
+end
+
+OpenBtn.MouseButton1Click:Connect(ToggleMenu)
+
+-- // 6. Header //
+local Header = Instance.new("Frame")
+Header.Name = "Header"
+Header.Size = UDim2.new(1, 0, 0, 50)
+Header.BackgroundColor3 = COLORS.Sidebar
+Header.BorderSizePixel = 0
+Header.Parent = MainFrame
+
+local TitleIcon = Instance.new("TextLabel")
+TitleIcon.Text = "🔱"
+TitleIcon.TextSize = 24
+TitleIcon.BackgroundTransparency = 1
+TitleIcon.Size = UDim2.new(0, 50, 1, 0)
+TitleIcon.Parent = Header
+
+local Title = Instance.new("TextLabel")
+Title.Text = "REX"
+Title.Font = Enum.Font.GothamBlack
+Title.TextSize = 20
+Title.TextColor3 = COLORS.Text
+Title.Size = UDim2.new(0, 200, 1, 0)
+Title.Position = UDim2.new(0, 50, 0, 0)
+Title.BackgroundTransparency = 1
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = Header
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Text = "×"
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.TextSize = 24
+CloseBtn.TextColor3 = COLORS.TextDim
+CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+CloseBtn.BackgroundTransparency = 1
+CloseBtn.Size = UDim2.new(0, 40, 0, 40)
+CloseBtn.Position = UDim2.new(1, -45, 0, 5)
+CloseBtn.Parent = Header
+AddCorner(CloseBtn, 8)
+
+CloseBtn.MouseButton1Click:Connect(function()
+    ToggleMenu()
+    if currentPreviewSound then currentPreviewSound:Stop() end
+end)
+
+-- // 7. Control Bar //
+local ControlBar = Instance.new("Frame")
+ControlBar.Size = UDim2.new(1, -20, 0, 50)
+ControlBar.Position = UDim2.new(0, 10, 0, 60)
+ControlBar.BackgroundTransparency = 1
+ControlBar.Parent = MainFrame
+
+local SearchBox = Instance.new("TextBox")
+SearchBox.PlaceholderText = "🤖มันบัคมันทำอะรไม่ได้ค้นหาอะไรไม่ได้"
+SearchBox.Text = ""
+SearchBox.Size = UDim2.new(0.55, 0, 1, 0)
+SearchBox.Position = UDim2.new(0, 0, 0, 0)
+SearchBox.BackgroundColor3 = COLORS.ItemBG
+SearchBox.TextColor3 = COLORS.Text
+SearchBox.PlaceholderColor3 = COLORS.TextDim
+SearchBox.Font = Enum.Font.Gotham
+SearchBox.TextSize = 14
+SearchBox.Parent = ControlBar
+AddCorner(SearchBox, 10)
+
+local ResetBtn = Instance.new("TextButton")
+ResetBtn.Text = "🔄"
+ResetBtn.Font = Enum.Font.GothamBold
+ResetBtn.TextSize = 20
+ResetBtn.Size = UDim2.new(0.12, 0, 1, 0)
+ResetBtn.Position = UDim2.new(0.57, 0, 0, 0)
+ResetBtn.BackgroundColor3 = COLORS.Sidebar
+ResetBtn.TextColor3 = COLORS.Text
+ResetBtn.Parent = ControlBar
+AddCorner(ResetBtn, 10)
+
+local ScanBtn = Instance.new("TextButton")
+ScanBtn.Text = "เริ่มหาเพลงเลย✅"
+ScanBtn.Font = Enum.Font.GothamBold
+ScanBtn.TextSize = 12
+ScanBtn.Size = UDim2.new(0.29, 0, 1, 0)
+ScanBtn.Position = UDim2.new(0.71, 0, 0, 0)
+ScanBtn.BackgroundColor3 = COLORS.Accent
+ScanBtn.TextColor3 = Color3.new(1,1,1)
+ScanBtn.Parent = ControlBar
+AddCorner(ScanBtn, 10)
+
+-- // 8. Results List //
+local ListContainer = Instance.new("ScrollingFrame")
+ListContainer.Size = UDim2.new(1, -20, 1, -120)
+ListContainer.Position = UDim2.new(0, 10, 0, 120)
+ListContainer.BackgroundTransparency = 1
+ListContainer.ScrollBarThickness = 6
+ListContainer.ScrollBarImageColor3 = COLORS.Accent
+ListContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
+ListContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
+ListContainer.Parent = MainFrame
+
+local ListLayout = Instance.new("UIListLayout")
+ListLayout.Padding = UDim.new(0, 8)
+ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ListLayout.Parent = ListContainer
+
+ResetBtn.MouseButton1Click:Connect(function()
+    for _, child in pairs(ListContainer:GetChildren()) do
+        if child:IsA("Frame") then child:Destroy() end
+    end
+    SearchBox.Text = ""
+    ScanBtn.Text = "SCAN SERVER"
+    
+    local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+    local tween = TweenService:Create(ResetBtn, tweenInfo, {Rotation = 360})
+    tween:Play()
+    tween.Completed:Connect(function() ResetBtn.Rotation = 0 end)
+end)
+
+-- // 9. ฟังก์ชันสร้าง Music Card (อัปเกรดระบบ Copy) //
+local function CreateMusicCard(soundObj, assetInfo)
+    local card = Instance.new("Frame")
+    card.Size = UDim2.new(1, -8, 0, 85)
+    card.BackgroundColor3 = COLORS.ItemBG
+    card.Parent = ListContainer
+    AddCorner(card, 10)
+
+    local cleanID = soundObj.SoundId:match("%d+") or "0"
+
+    -- รูปปก
+    local Cover = Instance.new("ImageLabel")
+    Cover.Size = UDim2.new(0, 69, 0, 69)
+    Cover.Position = UDim2.new(0, 8, 0, 8)
+    Cover.BackgroundColor3 = COLORS.Sidebar
+    Cover.Image = "rbxthumb://type=Asset&id=" .. cleanID .. "&w=150&h=150"
+    Cover.Parent = card
+    AddCorner(Cover, 8)
+
+    -- สถานะ (Playing/Idle)
+    local StatusLabel = Instance.new("TextLabel")
+    StatusLabel.Font = Enum.Font.GothamBlack
+    StatusLabel.TextSize = 10
+    StatusLabel.Size = UDim2.new(0, 80, 0, 15)
+    StatusLabel.Position = UDim2.new(1, -90, 0, 8)
+    StatusLabel.BackgroundTransparency = 1
+    StatusLabel.TextXAlignment = Enum.TextXAlignment.Right
+    StatusLabel.Parent = card
+
+    if soundObj.IsPlaying then
+        StatusLabel.Text = "🔊 PLAYING"
+        StatusLabel.TextColor3 = COLORS.Success
+        local activeStroke = Instance.new("UIStroke")
+        activeStroke.Color = COLORS.Success
+        activeStroke.Thickness = 1.5
+        activeStroke.Parent = card
+    else
+        StatusLabel.Text = "🔈 IDLE"
+        StatusLabel.TextColor3 = COLORS.TextDim
+    end
+
+    -- ชื่อเพลง (Song Name)
+    local SongName = Instance.new("TextBox")
+    SongName.Text = assetInfo and assetInfo.Name or "Unknown Song"
+    SongName.Size = UDim2.new(1, -170, 0, 20)
+    SongName.Position = UDim2.new(0, 85, 0, 8)
+    SongName.BackgroundTransparency = 1
+    SongName.TextColor3 = COLORS.Text
+    SongName.Font = Enum.Font.GothamBold
+    SongName.TextSize = 14
+    SongName.TextXAlignment = Enum.TextXAlignment.Left
+    SongName.TextEditable = false
+    SongName.ClearTextOnFocus = false
+    SongName.Parent = card
+
+    -- ชื่อผู้สร้าง
+    local CreatorName = Instance.new("TextLabel")
+    CreatorName.Text = "By: " .. (assetInfo and assetInfo.Creator.Name or "Unknown")
+    CreatorName.Size = UDim2.new(1, -170, 0, 15)
+    CreatorName.Position = UDim2.new(0, 85, 0, 30)
+    CreatorName.BackgroundTransparency = 1
+    CreatorName.TextColor3 = COLORS.TextDim
+    CreatorName.Font = Enum.Font.Gotham
+    CreatorName.TextSize = 12
+    CreatorName.TextXAlignment = Enum.TextXAlignment.Left
+    CreatorName.Parent = card
+
+    -- ช่อง ID
+    local IDBox = Instance.new("TextBox")
+    IDBox.Text = cleanID
+    IDBox.Size = UDim2.new(0, 90, 0, 24)
+    IDBox.Position = UDim2.new(0, 85, 0, 50)
+    IDBox.BackgroundColor3 = COLORS.Background
+    IDBox.TextColor3 = COLORS.Accent
+    IDBox.Font = Enum.Font.Code
+    IDBox.TextSize = 13
+    IDBox.ClearTextOnFocus = false
+    IDBox.TextEditable = false
+    IDBox.Parent = card
+    AddCorner(IDBox, 6)
+
+    -- ปุ่ม Copy ID (อัปเกรด)
+    local CopyIDBtn = Instance.new("TextButton")
+    CopyIDBtn.Text = "COPY ID"
+    CopyIDBtn.Size = UDim2.new(0, 60, 0, 24)
+    CopyIDBtn.Position = UDim2.new(0, 180, 0, 50)
+    CopyIDBtn.BackgroundColor3 = COLORS.Sidebar
+    CopyIDBtn.TextColor3 = COLORS.Text
+    CopyIDBtn.Font = Enum.Font.GothamBold
+    CopyIDBtn.TextSize = 10
+    CopyIDBtn.Parent = card
+    AddCorner(CopyIDBtn, 6)
+    
+    CopyIDBtn.MouseButton1Click:Connect(function()
+        -- พยายาม Copy อัตโนมัติก่อน
+        if SmartCopy(cleanID) then
+            CopyIDBtn.Text = "COPIED!"
+        else
+            -- ถ้าไม่ได้ ให้ใช้วิธีเดิม
+            IDBox:CaptureFocus()
+            IDBox.SelectionStart = 1
+            IDBox.CursorPosition = #IDBox.Text + 1
+            CopyIDBtn.Text = "CTRL+C"
+        end
+        task.wait(1)
+        CopyIDBtn.Text = "COPY ID"
+    end)
+
+    -- ปุ่ม Copy Name (อัปเกรด)
+    local CopyNameBtn = Instance.new("TextButton")
+    CopyNameBtn.Text = "NAME"
+    CopyNameBtn.Size = UDim2.new(0, 50, 0, 24)
+    CopyNameBtn.Position = UDim2.new(0, 245, 0, 50)
+    CopyNameBtn.BackgroundColor3 = COLORS.Sidebar
+    CopyNameBtn.TextColor3 = COLORS.Text
+    CopyNameBtn.Font = Enum.Font.GothamBold
+    CopyNameBtn.TextSize = 10
+    CopyNameBtn.Parent = card
+    AddCorner(CopyNameBtn, 6)
+
+    CopyNameBtn.MouseButton1Click:Connect(function()
+        -- พยายาม Copy ชื่ออัตโนมัติ
+        if SmartCopy(SongName.Text) then
+            CopyNameBtn.Text = "COPIED!"
+        else
+            -- ถ้าไม่ได้ ให้ใช้วิธีเดิม
+            SongName:CaptureFocus()
+            SongName.SelectionStart = 1
+            SongName.CursorPosition = #SongName.Text + 1
+            CopyNameBtn.Text = "CTRL+C"
+        end
+        task.wait(1)
+        CopyNameBtn.Text = "NAME"
+    end)
+
+    -- ปุ่มฟังเพลง
+    local PlayBtn = Instance.new("TextButton")
+    PlayBtn.Text = "▶"
+    PlayBtn.Size = UDim2.new(0, 40, 0, 40)
+    PlayBtn.Position = UDim2.new(1, -50, 0.5, 0)
+    PlayBtn.AnchorPoint = Vector2.new(0, 0.5)
+    PlayBtn.BackgroundColor3 = COLORS.Success
+    PlayBtn.TextColor3 = Color3.new(1,1,1)
+    PlayBtn.Font = Enum.Font.GothamBold
+    PlayBtn.TextSize = 18
+    PlayBtn.Parent = card
+    AddCorner(PlayBtn, 20)
+
+    PlayBtn.MouseButton1Click:Connect(function()
+        if currentPreviewSound and currentPreviewSound.SoundId == "rbxassetid://" .. cleanID and currentPreviewSound.IsPlaying then
+            currentPreviewSound:Stop()
+            PlayBtn.Text = "▶"
+            PlayBtn.BackgroundColor3 = COLORS.Success
+            return
+        end
+
+        if currentPreviewSound then currentPreviewSound:Stop() end
+        
+        -- Reset other play buttons (simple visual reset)
+        for _, otherCard in pairs(ListContainer:GetChildren()) do
+            if otherCard:IsA("Frame") then
+                -- In a real app we might track button refs, but here we just rely on local state updates when clicked
+            end
+        end
+
+        if not MainFrame:FindFirstChild("PreviewSound") then
+            local s = Instance.new("Sound")
+            s.Name = "PreviewSound"
+            s.Parent = MainFrame
+        end
+        
+        local pSound = MainFrame.PreviewSound
+        pSound.SoundId = "rbxassetid://" .. cleanID
+        pSound.Volume = 2
+        pSound.Looped = false
+        pSound:Play()
+        currentPreviewSound = pSound
+        
+        PlayBtn.Text = "⏹"
+        PlayBtn.BackgroundColor3 = COLORS.Stop
+        
+        task.delay(60, function()
+            if pSound.IsPlaying and pSound.SoundId == "rbxassetid://" .. cleanID then
+                pSound:Stop()
+                PlayBtn.Text = "▶"
+                PlayBtn.BackgroundColor3 = COLORS.Success
+            end
+        end)
+        
+        pSound.Ended:Connect(function()
+            PlayBtn.Text = "▶"
+            PlayBtn.BackgroundColor3 = COLORS.Success
+        end)
+    end)
+end
+
+-- // 10. ระบบสแกนหาเพลง //
+local function ScanSounds()
+    if isScanning then return end
+    isScanning = true
+    ScanBtn.Text = "SCANNING..."
+    
+    for _, child in pairs(ListContainer:GetChildren()) do
+        if child:IsA("Frame") then child:Destroy() end
+    end
+    
+    local foundIDs = {}
+    local soundObjects = {}
+    local filterName = SearchBox.Text:lower()
+    
+    local searchTargets = {workspace, SoundService, ReplicatedStorage, Lighting}
+    
+    if filterName ~= "" then
+        searchTargets = {}
+        for _, p in pairs(Players:GetPlayers()) do
+            if p.Name:lower():find(filterName) or (p.DisplayName and p.DisplayName:lower():find(filterName)) then
+                if p.Character then
+                    table.insert(searchTargets, p.Character)
+                end
+            end
+        end
+    end
+
+    for _, target in pairs(searchTargets) do
+        pcall(function()
+            for _, obj in pairs(target:GetDescendants()) do
+                if obj:IsA("Sound") then
+                    local id = obj.SoundId
+                    if id and id ~= "" and id:match("%d+") then
+                        local cleanID = id:match("%d+")
+                        if not foundIDs[cleanID] then
+                            foundIDs[cleanID] = true
+                            table.insert(soundObjects, obj)
+                        end
+                    end
+                end
+            end
+        end)
+    end
+    
+    ScanBtn.Text = "FOUND: " .. #soundObjects
+    
+    task.spawn(function()
+        table.sort(soundObjects, function(a, b)
+            return (a.IsPlaying and not b.IsPlaying)
+        end)
+
+        for i, sound in pairs(soundObjects) do
+            local assetId = tonumber(sound.SoundId:match("%d+"))
+            if assetId then
+                local success, info = pcall(function()
+                    return MarketplaceService:GetProductInfo(assetId)
+                end)
+                
+                if success and info and info.AssetTypeId == 3 then
+                    CreateMusicCard(sound, info)
+                else
+                    CreateMusicCard(sound, {Name = "Private/Unknown", Creator = {Name = "-"}})
+                end
+            end
+            if i % 10 == 0 then task.wait() end
+        end
+        ScanBtn.Text = "SCAN SERVER"
+        isScanning = false
+    end)
+end
+
+ScanBtn.MouseButton1Click:Connect(ScanSounds)
+
+-- // 11. ระบบลากหน้าต่าง //
+local dragging, dragInput, dragStart, startPos
+
+local function update(input)
+    local delta = input.Position - dragStart
+    MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+Header.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+Header.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        update(input)
+    end
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if input.KeyCode == Enum.KeyCode.RightControl then
+        ToggleMenu()
+    end
+end)
