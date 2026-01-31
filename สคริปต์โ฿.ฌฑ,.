@@ -1,0 +1,648 @@
+--[[
+    ROBLOX MUSIC VIEWER V12 - PREVIEW BUTTON ADDED
+    Language: Thai (ภาษาไทย)
+    Features: 
+    - Smart Sound Scoring (แยกแยะเพลง vs เสียงเอฟเฟกต์)
+    - Enhanced Search (Enter Key + Smart Match)
+    - Preview Button (Listen for 1 min)
+    - Auto UI Parenting (CoreGui / PlayerGui)
+    - Universal Clipboard Support
+    - Draggable Toggle & Main UI
+    - 100% Real Fetch logic
+]]
+
+local Players = game:GetService("Players")
+local MarketplaceService = game:GetService("MarketplaceService")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+
+-- --- ระบบจัดการ UI Parent (กัน Error) ---
+local function getUIParent()
+    local success, result = pcall(function()
+        return CoreGui
+    end)
+    if success and result then
+        return result
+    end
+    return Players.LocalPlayer:WaitForChild("PlayerGui")
+end
+
+local ParentTarget = getUIParent()
+
+-- ลบ UI เก่าออก
+if ParentTarget:FindFirstChild("MusicViewerUI") then
+    ParentTarget.MusicViewerUI:Destroy()
+end
+
+-- --- สร้าง GUI หลัก (MAIN GUI) ---
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "MusicViewerUI"
+ScreenGui.Parent = ParentTarget
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.ResetOnSpawn = false -- กัน UI หายเวลาตาย (ถ้าอยู่ PlayerGui)
+
+-- ตัวแปรเก็บข้อมูล
+local currentTargetPlayer = nil
+local copyConnection = nil
+local copyNameConnection = nil
+local previewConnection = nil
+local previewSound = Instance.new("Sound") -- สร้างตัวเล่นเสียง
+previewSound.Name = "MusicPreviewSound"
+previewSound.Volume = 1
+previewSound.Parent = ScreenGui
+
+-- ==========================================
+-- 1. ปุ่มเปิด-ปิด (TOGGLE BUTTON)
+-- ==========================================
+local ToggleFrame = Instance.new("Frame")
+ToggleFrame.Name = "ToggleFrame"
+ToggleFrame.Parent = ScreenGui
+ToggleFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+ToggleFrame.Position = UDim2.new(0.02, 0, 0.2, 0)
+ToggleFrame.Size = UDim2.new(0, 60, 0, 60)
+ToggleFrame.BorderSizePixel = 0
+ToggleFrame.Active = true
+
+local ToggleCorner = Instance.new("UICorner")
+ToggleCorner.CornerRadius = UDim.new(0, 16)
+ToggleCorner.Parent = ToggleFrame
+
+local ToggleStroke = Instance.new("UIStroke")
+ToggleStroke.Parent = ToggleFrame
+ToggleStroke.Color = Color3.fromRGB(100, 150, 255)
+ToggleStroke.Thickness = 2
+ToggleStroke.Transparency = 0.5
+
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Parent = ToggleFrame
+ToggleBtn.BackgroundTransparency = 1
+ToggleBtn.Size = UDim2.new(1, 0, 1, 0)
+ToggleBtn.Font = Enum.Font.GothamBold
+ToggleBtn.Text = "🎵"
+ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleBtn.TextSize = 32
+
+local function makeDraggable(frame)
+    local dragging, dragInput, dragStart, startPos
+    frame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
+        end
+    end)
+    frame.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then dragInput = input end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+end
+makeDraggable(ToggleFrame)
+
+-- ==========================================
+-- 2. หน้าต่างหลัก (MAIN WINDOW)
+-- ==========================================
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+MainFrame.BorderSizePixel = 0
+MainFrame.Position = UDim2.new(0.5, -300, 0.5, -200)
+MainFrame.Size = UDim2.new(0, 600, 0, 440) -- เพิ่มความสูงเล็กน้อยเพื่อรับปุ่มใหม่
+MainFrame.Visible = true
+
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 10)
+MainCorner.Parent = MainFrame
+
+local MainStroke = Instance.new("UIStroke")
+MainStroke.Parent = MainFrame
+MainStroke.Color = Color3.fromRGB(60, 60, 60)
+MainStroke.Thickness = 2
+
+makeDraggable(MainFrame)
+
+ToggleBtn.MouseButton1Click:Connect(function()
+    MainFrame.Visible = not MainFrame.Visible
+end)
+
+-- หัวข้อ (Title Bar)
+local TitleBar = Instance.new("Frame")
+TitleBar.Parent = MainFrame
+TitleBar.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+TitleBar.Size = UDim2.new(1, 0, 0, 50)
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 10)
+TitleCorner.Parent = TitleBar
+
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Parent = TitleBar
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Position = UDim2.new(0, 15, 0, 0)
+TitleLabel.Size = UDim2.new(0, 300, 1, 0)
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.Text = "🎵 Music Fetcher Ultimate"
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleLabel.TextSize = 22
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local CloseButton = Instance.new("TextButton")
+CloseButton.Parent = TitleBar
+CloseButton.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+CloseButton.Position = UDim2.new(1, -45, 0.5, -15)
+CloseButton.Size = UDim2.new(0, 30, 0, 30)
+CloseButton.Font = Enum.Font.GothamBold
+CloseButton.Text = "_"
+CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseButton.TextSize = 18
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 6)
+CloseCorner.Parent = CloseButton
+
+CloseButton.MouseButton1Click:Connect(function()
+    MainFrame.Visible = false
+    previewSound:Stop() -- หยุดเพลงเมื่อปิด
+end)
+
+-- --- รายชื่อผู้เล่น (Player List) ---
+local PlayerListFrame = Instance.new("ScrollingFrame")
+PlayerListFrame.Parent = MainFrame
+PlayerListFrame.Active = true
+PlayerListFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+PlayerListFrame.BorderSizePixel = 0
+PlayerListFrame.Position = UDim2.new(0, 15, 0, 65)
+PlayerListFrame.Size = UDim2.new(0, 180, 0, 360) -- เพิ่มความสูง
+PlayerListFrame.ScrollBarThickness = 6
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Parent = PlayerListFrame
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Padding = UDim.new(0, 6)
+
+local PlayerListPadding = Instance.new("UIPadding")
+PlayerListPadding.Parent = PlayerListFrame
+PlayerListPadding.PaddingTop = UDim.new(0, 5)
+PlayerListPadding.PaddingLeft = UDim.new(0, 5)
+
+-- --- ส่วนแสดงข้อมูล (Info Panel) ---
+local InfoFrame = Instance.new("Frame")
+InfoFrame.Parent = MainFrame
+InfoFrame.BackgroundTransparency = 1
+InfoFrame.Position = UDim2.new(0, 210, 0, 65)
+InfoFrame.Size = UDim2.new(0, 375, 0, 360) -- เพิ่มความสูง
+
+-- ช่องค้นหา
+local SearchInput = Instance.new("TextBox")
+SearchInput.Parent = InfoFrame
+SearchInput.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+SearchInput.BorderSizePixel = 0
+SearchInput.Size = UDim2.new(0.72, 0, 0, 40)
+SearchInput.Font = Enum.Font.Gotham
+SearchInput.PlaceholderText = "พิมพ์ชื่อเพื่อสแกน..."
+SearchInput.Text = ""
+SearchInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+SearchInput.TextSize = 16
+local SearchCorner = Instance.new("UICorner")
+SearchCorner.CornerRadius = UDim.new(0, 8)
+SearchCorner.Parent = SearchInput
+
+-- ปุ่มค้นหา
+local SearchBtn = Instance.new("TextButton")
+SearchBtn.Parent = InfoFrame
+SearchBtn.BackgroundColor3 = Color3.fromRGB(80, 120, 255)
+SearchBtn.Position = UDim2.new(0.75, 0, 0, 0)
+SearchBtn.Size = UDim2.new(0.25, 0, 0, 40)
+SearchBtn.Font = Enum.Font.GothamBold
+SearchBtn.Text = "หา"
+SearchBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SearchBtn.TextSize = 16
+local BtnCorner = Instance.new("UICorner")
+BtnCorner.CornerRadius = UDim.new(0, 8)
+BtnCorner.Parent = SearchBtn
+
+-- กรอบรายละเอียด
+local DetailsFrame = Instance.new("Frame")
+DetailsFrame.Parent = InfoFrame
+DetailsFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+DetailsFrame.Position = UDim2.new(0, 0, 0, 55)
+DetailsFrame.Size = UDim2.new(1, 0, 0, 305) -- เพิ่มความสูงรองรับปุ่มใหม่
+local DetailsCorner = Instance.new("UICorner")
+DetailsCorner.CornerRadius = UDim.new(0, 8)
+DetailsCorner.Parent = DetailsFrame
+
+-- รูปปกเพลง
+local CoverImage = Instance.new("ImageLabel")
+CoverImage.Name = "CoverImage"
+CoverImage.Parent = DetailsFrame
+CoverImage.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+CoverImage.Position = UDim2.new(0, 15, 0, 15)
+CoverImage.Size = UDim2.new(0, 110, 0, 110)
+CoverImage.Image = "rbxassetid://0"
+CoverImage.ScaleType = Enum.ScaleType.Fit
+local CoverCorner = Instance.new("UICorner")
+CoverCorner.CornerRadius = UDim.new(0, 8)
+CoverCorner.Parent = CoverImage
+
+-- Labels
+local function createLabel(text, yPos, color, size, isBold)
+    local lab = Instance.new("TextLabel")
+    lab.Parent = DetailsFrame
+    lab.BackgroundTransparency = 1
+    lab.Position = UDim2.new(0, 140, 0, yPos)
+    lab.Size = UDim2.new(1, -150, 0, 25)
+    lab.Font = isBold and Enum.Font.GothamBold or Enum.Font.Gotham
+    lab.Text = text
+    lab.TextColor3 = color or Color3.fromRGB(220, 220, 220)
+    lab.TextSize = size or 16
+    lab.TextXAlignment = Enum.TextXAlignment.Left
+    lab.TextWrapped = true
+    return lab
+end
+
+local StatusLabel = createLabel("สถานะ: เลือกคนเพื่อสแกน", 15, Color3.fromRGB(255, 220, 100), 16, true)
+local SourceLabel = createLabel("แหล่งที่มา: -", 40, Color3.fromRGB(150, 150, 150), 14)
+local IDLabel = createLabel("UID: -", 65, Color3.fromRGB(255, 255, 255), 18, true)
+local NameLabel = createLabel("ชื่อเพลง: -", 90, nil, 16)
+local CreatorLabel = createLabel("ลิขสิทธิ์/ผู้สร้าง: -", 115, Color3.fromRGB(100, 200, 255), 14)
+
+-- ปุ่ม Copy UID
+local CopyButton = Instance.new("TextButton")
+CopyButton.Parent = DetailsFrame
+CopyButton.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+CopyButton.Position = UDim2.new(0, 15, 0, 145)
+CopyButton.Size = UDim2.new(1, -30, 0, 50)
+CopyButton.Font = Enum.Font.GothamBold
+CopyButton.Text = "คัดลอก UID เพลง"
+CopyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CopyButton.TextSize = 20
+CopyButton.Visible = false
+local CopyCorner2 = Instance.new("UICorner")
+CopyCorner2.CornerRadius = UDim.new(0, 8)
+CopyCorner2.Parent = CopyButton
+
+-- ปุ่ม Copy ชื่อเพลง
+local CopyNameBtn = Instance.new("TextButton")
+CopyNameBtn.Parent = DetailsFrame
+CopyNameBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+CopyNameBtn.Position = UDim2.new(0, 15, 0, 205)
+CopyNameBtn.Size = UDim2.new(1, -30, 0, 40)
+CopyNameBtn.Font = Enum.Font.Gotham
+CopyNameBtn.Text = "คัดลอกชื่อเพลง"
+CopyNameBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+CopyNameBtn.TextSize = 16
+CopyNameBtn.Visible = false
+local CopyNameCorner = Instance.new("UICorner")
+CopyNameCorner.CornerRadius = UDim.new(0, 8)
+CopyNameCorner.Parent = CopyNameBtn
+
+-- ปุ่มฟังเพลงตัวอย่าง (Preview Button)
+local PreviewBtn = Instance.new("TextButton")
+PreviewBtn.Parent = DetailsFrame
+PreviewBtn.BackgroundColor3 = Color3.fromRGB(155, 89, 182) -- สีม่วง
+PreviewBtn.Position = UDim2.new(0, 15, 0, 255)
+PreviewBtn.Size = UDim2.new(1, -30, 0, 40)
+PreviewBtn.Font = Enum.Font.GothamBold
+PreviewBtn.Text = "▶ ฟังตัวอย่าง (1 นาที)"
+PreviewBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+PreviewBtn.TextSize = 16
+PreviewBtn.Visible = false
+local PreviewCorner = Instance.new("UICorner")
+PreviewCorner.CornerRadius = UDim.new(0, 8)
+PreviewCorner.Parent = PreviewBtn
+
+-- ==========================================
+-- 3. ระบบสแกนและดึงข้อมูลขั้นสูง (SMART LOGIC)
+-- ==========================================
+
+local function getAssetInfo(assetId)
+    local success, info = pcall(function()
+        return MarketplaceService:GetProductInfo(assetId)
+    end)
+    if success and info then return info end
+    return nil
+end
+
+local function updateDisplay(soundId, statusMsg, sourceMsg)
+    StatusLabel.Text = statusMsg or "พบเพลง!"
+    SourceLabel.Text = sourceMsg or "แหล่งที่มา: ไม่ทราบ"
+    
+    local cleanId = string.match(soundId, "%d+")
+    
+    -- รีเซ็ตเสียงและปุ่มฟัง
+    previewSound:Stop()
+    PreviewBtn.Text = "▶ ฟังตัวอย่าง (1 นาที)"
+    PreviewBtn.BackgroundColor3 = Color3.fromRGB(155, 89, 182)
+    
+    if cleanId then
+        IDLabel.Text = "UID: " .. cleanId
+        NameLabel.Text = "กำลังโหลดข้อมูล..."
+        CreatorLabel.Text = "กำลังตรวจสอบ..."
+        
+        CoverImage.Image = "rbxassetid://0"
+        
+        CopyButton.Visible = true
+        CopyNameBtn.Visible = true
+        PreviewBtn.Visible = true -- แสดงปุ่มฟัง
+        
+        CopyButton.Text = "คัดลอก UID (" .. cleanId .. ")"
+        
+        task.spawn(function()
+            CoverImage.Image = "rbxthumb://type=Asset&id=" .. cleanId .. "&w=150&h=150"
+            local info = getAssetInfo(tonumber(cleanId))
+            if info then
+                NameLabel.Text = string.sub(info.Name, 1, 30)
+                CreatorLabel.Text = "โดย: " .. (info.Creator.Name or "Unknown")
+            else
+                NameLabel.Text = "ไม่พบชื่อเพลง"
+                CreatorLabel.Text = "โดย: -"
+            end
+        end)
+        
+        -- จัดการปุ่ม Copy UID
+        if copyConnection then copyConnection:Disconnect() end
+        copyConnection = CopyButton.MouseButton1Click:Connect(function()
+            local clipFunc = setclipboard or toclipboard or set_clipboard or (syn and syn.write_clipboard)
+            
+            if clipFunc then
+                clipFunc(tostring(cleanId))
+                CopyButton.Text = "✅ คัดลอกเรียบร้อย!"
+                CopyButton.BackgroundColor3 = Color3.fromRGB(39, 174, 96)
+                task.wait(1)
+                CopyButton.Text = "คัดลอก UID (" .. cleanId .. ")"
+                CopyButton.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+            else
+                CopyButton.Text = "❌ ไม่รองรับ Clipboard"
+                warn("Your executor does not support clipboard functions.")
+            end
+        end)
+        
+        -- จัดการปุ่ม Copy ชื่อเพลง
+        if copyNameConnection then copyNameConnection:Disconnect() end
+        copyNameConnection = CopyNameBtn.MouseButton1Click:Connect(function()
+            local clipFunc = setclipboard or toclipboard or set_clipboard or (syn and syn.write_clipboard)
+            
+            if clipFunc then
+                clipFunc(NameLabel.Text)
+                CopyNameBtn.Text = "คัดลอกชื่อแล้ว!"
+                task.wait(1)
+                CopyNameBtn.Text = "คัดลอกชื่อเพลง"
+            end
+        end)
+        
+        -- จัดการปุ่มฟังเพลง (Preview)
+        if previewConnection then previewConnection:Disconnect() end
+        previewConnection = PreviewBtn.MouseButton1Click:Connect(function()
+            if previewSound.IsPlaying then
+                -- ถ้าเล่นอยู่ ให้หยุด
+                previewSound:Stop()
+                PreviewBtn.Text = "▶ ฟังตัวอย่าง (1 นาที)"
+                PreviewBtn.BackgroundColor3 = Color3.fromRGB(155, 89, 182)
+            else
+                -- ถ้าหยุดอยู่ ให้เล่น
+                previewSound.SoundId = "rbxassetid://" .. cleanId
+                previewSound:Play()
+                PreviewBtn.Text = "⏹ หยุดฟัง"
+                PreviewBtn.BackgroundColor3 = Color3.fromRGB(231, 76, 60) -- สีแดง
+                
+                -- ตั้งเวลาหยุดอัตโนมัติเมื่อครบ 60 วินาที
+                task.delay(60, function()
+                    if previewSound.IsPlaying and previewSound.SoundId == "rbxassetid://" .. cleanId then
+                        previewSound:Stop()
+                        PreviewBtn.Text = "▶ ฟังตัวอย่าง (1 นาที)"
+                        PreviewBtn.BackgroundColor3 = Color3.fromRGB(155, 89, 182)
+                    end
+                end)
+            end
+        end)
+        
+    else
+        IDLabel.Text = "ไม่พบเพลง"
+        NameLabel.Text = "-"
+        CreatorLabel.Text = "-"
+        CoverImage.Image = ""
+        CopyButton.Visible = false
+        CopyNameBtn.Visible = false
+        PreviewBtn.Visible = false -- ซ่อนปุ่มฟังถ้าไม่เจอ
+    end
+end
+
+-- --- SMART FINDER: ระบบให้คะแนนเสียง ---
+-- แก้ปัญหาการดึงไปโดนเสียงเครื่องยนต์/เสียงเดิน/เสียงเอฟเฟกต์
+local function calculateSoundScore(sound)
+    local score = 0
+    
+    -- 1. ถ้ากำลังเล่นอยู่ เอาคะแนนไปเลย
+    if sound.Playing then score = score + 50 end
+    
+    -- 2. ถ้าเพลงยาวกว่า 10 วินาที น่าจะเป็นเพลง (เสียงปืน/เครื่องยนต์มักจะสั้นแล้ว Loop)
+    if sound.TimeLength > 10 then score = score + 30 end
+    
+    -- 3. ดูชื่อ Sound
+    local name = sound.Name:lower()
+    if name:find("music") or name:find("song") or name:find("radio") then
+        score = score + 20
+    elseif name:find("engine") or name:find("wind") or name:find("tire") or name:find("walk") then
+        score = score - 50 -- หักคะแนนพวกเสียงรถ/เสียงเดิน
+    end
+    
+    -- 4. ดู Parent (อยู่ใน Boombox หรือไม่)
+    local parentName = sound.Parent.Name:lower()
+    if parentName:find("boombox") or parentName:find("radio") then
+        score = score + 20
+    end
+    
+    return score
+end
+
+local function findSoundRecursive(parent)
+    local bestSoundId = nil
+    local maxScore = -100 -- เริ่มต้นต่ำๆ
+    
+    local success, descendants = pcall(function()
+        return parent:GetDescendants()
+    end)
+    
+    if not success or not descendants then return nil end
+
+    for _, desc in pairs(descendants) do
+        if desc:IsA("Sound") and desc.SoundId ~= "" then
+            -- ต้องมีตัวเลขใน ID
+            if string.match(desc.SoundId, "%d+") then
+                local score = calculateSoundScore(desc)
+                
+                -- ถ้าคะแนนมากกว่าตัวที่เคยเจอ ให้จำตัวนี้แทน
+                if score > maxScore then
+                    maxScore = score
+                    bestSoundId = desc.SoundId
+                end
+            end
+        end
+    end
+    
+    return bestSoundId
+end
+
+local function scanPlayer(player)
+    currentTargetPlayer = player
+    StatusLabel.Text = "กำลังสแกน " .. player.Name .. "..."
+    StatusLabel.TextColor3 = Color3.fromRGB(255, 220, 100)
+    
+    local foundSound = nil
+    local sourceName = ""
+    
+    -- 1. Character Scan
+    if player.Character then
+        foundSound = findSoundRecursive(player.Character)
+        if foundSound then sourceName = "ตัวละคร / วิทยุที่ถือ" end
+    end
+    
+    -- 2. Vehicle Scan (Smart)
+    if not foundSound and player.Character then
+        local humanoid = player.Character:FindFirstChild("Humanoid")
+        if humanoid and humanoid.SeatPart then
+            local seat = humanoid.SeatPart
+            local vehicle = seat.Parent
+            
+            -- วนหา Model หลักของรถ
+            while vehicle.Parent and not vehicle.Parent:IsA("Workspace") do
+                vehicle = vehicle.Parent
+            end
+            
+            -- สแกนทั้งคันรถ
+            foundSound = findSoundRecursive(vehicle)
+            if foundSound then sourceName = "ยานพาหนะ (รถ/เรือ)" end
+        end
+    end
+    
+    -- 3. Backpack Scan
+    if not foundSound and player.Backpack then
+        foundSound = findSoundRecursive(player.Backpack)
+        if foundSound then sourceName = "ในกระเป๋า (Backpack)" end
+    end
+
+    if foundSound then
+        updateDisplay(foundSound, "✅ เจอเพลงแล้ว!", "แหล่งที่มา: " .. sourceName)
+        StatusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+    else
+        StatusLabel.Text = "ไม่เจออยู่ไอดีเพลงนี้"
+        StatusLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+        SourceLabel.Text = "แหล่งที่มา: -"
+        updateDisplay("", "ไม่เจออยู่ไอดีเพลงนี้", "-")
+    end
+end
+
+-- --- สร้างปุ่มผู้เล่น ---
+local function createPlayerButton(player)
+    local btn = Instance.new("TextButton")
+    btn.Name = player.Name
+    btn.Parent = PlayerListFrame
+    btn.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+    btn.Size = UDim2.new(1, -5, 0, 40)
+    btn.Font = Enum.Font.Gotham
+    btn.Text = "  " .. player.Name
+    btn.TextColor3 = Color3.fromRGB(220, 220, 220)
+    btn.TextSize = 15
+    btn.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = btn
+    
+    btn.MouseButton1Click:Connect(function()
+        for _, child in pairs(PlayerListFrame:GetChildren()) do
+            if child:IsA("TextButton") then
+                child.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+            end
+        end
+        btn.BackgroundColor3 = Color3.fromRGB(80, 120, 255)
+        scanPlayer(player)
+    end)
+end
+
+local function refreshList()
+    for _, child in pairs(PlayerListFrame:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+    for _, player in pairs(Players:GetPlayers()) do
+        createPlayerButton(player)
+    end
+end
+
+Players.PlayerAdded:Connect(refreshList)
+Players.PlayerRemoving:Connect(refreshList)
+
+-- ระบบค้นหาที่ปรับปรุงใหม่ (SEARCH LOGIC)
+local function performSearch()
+    local text = SearchInput.Text:gsub("^%s*(.-)%s*$", "%1") -- ตัดช่องว่างหน้าหลัง
+    if text == "" then return end
+    
+    local searchName = text:lower()
+    local foundPlayer = nil
+    local players = Players:GetPlayers()
+    
+    -- 1. หาชื่อ Username ตรงเป๊ะ (Priority สูงสุด)
+    for _, p in pairs(players) do
+        if p.Name:lower() == searchName then
+            foundPlayer = p
+            break
+        end
+    end
+    
+    -- 2. หาชื่อ Display Name ตรงเป๊ะ
+    if not foundPlayer then
+        for _, p in pairs(players) do
+            if p.DisplayName:lower() == searchName then
+                foundPlayer = p
+                break
+            end
+        end
+    end
+    
+    -- 3. หาบางส่วนของชื่อ (Partial Match)
+    if not foundPlayer then
+        for _, p in pairs(players) do
+            if p.Name:lower():find(searchName) or p.DisplayName:lower():find(searchName) then
+                foundPlayer = p
+                break
+            end
+        end
+    end
+    
+    if foundPlayer then
+        -- ไฮไลท์ปุ่มในรายชื่อ
+        for _, child in pairs(PlayerListFrame:GetChildren()) do
+            if child:IsA("TextButton") then
+                if child.Name == foundPlayer.Name then
+                    child.BackgroundColor3 = Color3.fromRGB(80, 120, 255)
+                    -- เลื่อน Scrollbar ไปหาปุ่ม (ถ้าทำได้) หรืออย่างน้อยก็เปลี่ยนสี
+                else
+                    child.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+                end
+            end
+        end
+        
+        -- สแกนทันที
+        scanPlayer(foundPlayer)
+    else
+        StatusLabel.Text = "ไม่พบผู้เล่น: " .. text
+        StatusLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+    end
+end
+
+SearchBtn.MouseButton1Click:Connect(performSearch)
+SearchInput.FocusLost:Connect(function(enterPressed)
+    if enterPressed then
+        performSearch()
+    end
+end)
+
+refreshList()
