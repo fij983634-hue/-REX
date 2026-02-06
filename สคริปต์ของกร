@@ -1,0 +1,42 @@
+-- สร้าง UI แบบรวดเร็วด้วยสคริปต์
+local player = game.Players.LocalPlayer
+local sg = Instance.new("ScreenGui", player.PlayerGui)
+
+-- สร้างช่องใส่ ID
+local input = Instance.new("TextBox", sg)
+input.Size = UDim2.new(0, 200, 0, 50)
+input.Position = UDim2.new(0.5, -105, 0.4, 0)
+input.PlaceholderText = "ใส่ Music ID ตรงนี้"
+input.Text = ""
+
+-- สร้างปุ่ม Play/Stop
+local button = Instance.new("TextButton", sg)
+button.Size = UDim2.new(0, 200, 0, 50)
+button.Position = UDim2.new(0.5, -105, 0.5, 0)
+button.Text = "เล่นเพลง / หยุดเพลง"
+button.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+
+-- ตัวแปรจัดการเสียง
+local sound = Instance.new("Sound", game.Workspace)
+sound.Name = "ClientMusic"
+local isPlaying = false
+
+-- ฟังก์ชันทำงานเมื่อกดปุ่ม
+button.MouseButton1Click:Connect(function()
+    if not isPlaying then
+        -- ถ้าไม่ได้เล่นอยู่ ให้เริ่มเล่น
+        if input.Text ~= "" then
+            sound.SoundId = "rbxassetid://" .. input.Text
+            sound:Play()
+            isPlaying = true
+            button.Text = "หยุดเพลง (STOP)"
+            button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        end
+    else
+        -- ถ้าเล่นอยู่ ให้หยุด
+        sound:Stop()
+        isPlaying = false
+        button.Text = "เล่นเพลง (PLAY)"
+        button.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+    end
+end)
