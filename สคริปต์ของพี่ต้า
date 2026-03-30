@@ -1,0 +1,63 @@
+-- UI + Drag + เล่น 2 ระบบด้วยปุ่มเดียว
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local player = game.Players.LocalPlayer
+
+-- GUI
+local gui = Instance.new("ScreenGui")
+gui.Name = "MultiMusicUI"
+gui.ResetOnSpawn = false
+gui.Parent = player:WaitForChild("PlayerGui")
+
+-- ปุ่มเปิด/ปิด
+local toggleBtn = Instance.new("TextButton", gui)
+toggleBtn.Size = UDim2.new(0, 120, 0, 40)
+toggleBtn.Position = UDim2.new(0, 10, 0, 10)
+toggleBtn.Text = "เปิด/ปิด UI"
+
+-- Frame
+local frame = Instance.new("Frame", gui)
+frame.Size = UDim2.new(0, 280, 0, 160)
+frame.Position = UDim2.new(0.3, 0, 0.3, 0)
+frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
+frame.Active = true
+frame.Draggable = true
+
+-- ช่องใส่ ID
+local textbox = Instance.new("TextBox", frame)
+textbox.Size = UDim2.new(0, 220, 0, 40)
+textbox.Position = UDim2.new(0, 30, 0, 20)
+textbox.PlaceholderText = "ใส่ ID เพลง"
+
+-- 🔥 ปุ่มเดียว
+local playBtn = Instance.new("TextButton", frame)
+playBtn.Size = UDim2.new(0, 220, 0, 50)
+playBtn.Position = UDim2.new(0, 30, 0, 80)
+playBtn.Text = "เล่นเพลง (All)"
+playBtn.BackgroundColor3 = Color3.fromRGB(0,255,100)
+
+-- เปิด/ปิด
+local open = true
+toggleBtn.MouseButton1Click:Connect(function()
+    open = not open
+    frame.Visible = open
+end)
+
+-- 🔥 กดครั้งเดียว เล่น 2 ระบบ
+playBtn.MouseButton1Click:Connect(function()
+    local id = textbox.Text
+
+    -- Scooter
+    pcall(function()
+        ReplicatedStorage:WaitForChild("RE")
+            :WaitForChild("1NoMoto1rVehicle1s")
+            :FireServer("PickingScooterMusicText", id, true)
+    end)
+
+    -- Tool
+    pcall(function()
+        ReplicatedStorage:WaitForChild("RE")
+            :WaitForChild("PlayerToolEvent")
+            :FireServer("ToolMusicText", id, true)
+    end)
+end)
