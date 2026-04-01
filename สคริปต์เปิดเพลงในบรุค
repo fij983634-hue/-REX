@@ -1,0 +1,432 @@
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- ลบ UI เก่าออกถ้ามี (ป้องกันการซ้อนทับเวลา Rerun)
+if playerGui:FindFirstChild("NeonMusicX") then
+	playerGui.NeonMusicX:Destroy()
+end
+
+-- GUI ใหม่ทั้งหมด
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "NeonMusicX"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 350, 0, 480) 
+mainFrame.Position = UDim2.new(0.5, -175, 0.5, -240)
+mainFrame.BackgroundColor3 = Color3.fromRGB(14, 14, 35)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.ClipsDescendants = true -- เพื่อให้รูปไม่ล้นขอบโค้ง
+mainFrame.Parent = screenGui
+
+-- เพิ่มรูปพื้นหลัง
+local backgroundImage = Instance.new("ImageLabel")
+backgroundImage.Name = "Background"
+backgroundImage.Size = UDim2.new(1, 0, 1, 0)
+backgroundImage.Position = UDim2.new(0, 0, 0, 0)
+backgroundImage.Image = "rbxassetid://135400262657471" -- หมายเหตุ: ใน Roblox จริงต้องใช้ ID รูปภาพ (ผมใส่ ID ตัวอย่างที่ใกล้เคียงลิ้งก์ให้ หรือคุณสามารถเปลี่ยนเป็น Asset ID ของคุณได้)
+-- เนื่องจากลิ้งก์ภายนอกตรงๆ ใช้ใน Roblox ไม่ได้ ต้องอัปโหลดเป็น Decal ก่อน
+backgroundImage.Image = "http://www.roblox.com/asset/?id=12521990422" -- ตัวอย่าง ID รูปแนวอวกาศ/Neon
+backgroundImage.ImageTransparency = 0.6 -- ปรับความโปร่งใสให้พอดี
+backgroundImage.ScaleType = Enum.ScaleType.Crop
+backgroundImage.ZIndex = 0 -- ให้อยู่หลังสุด
+backgroundImage.Parent = mainFrame
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 15)
+corner.Parent = mainFrame
+
+local stroke = Instance.new("UIStroke")
+stroke.Color = Color3.fromRGB(160, 50, 255)
+stroke.Thickness = 4
+stroke.Parent = mainFrame
+
+-- Title Bar
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 50)
+titleBar.BackgroundColor3 = Color3.fromRGB(8, 8, 28)
+titleBar.BackgroundTransparency = 0.2 -- ให้เห็นพื้นหลังลางๆ
+titleBar.BorderSizePixel = 0
+titleBar.ZIndex = 2
+titleBar.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 15)
+titleCorner.Parent = titleBar
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 1, 0)
+title.BackgroundTransparency = 1
+title.Text = "🌌 สคริปต์ของEXD"
+title.TextColor3 = Color3.fromRGB(0, 255, 210)
+title.TextSize = 22 
+title.Font = Enum.Font.GothamBlack
+title.Active = true 
+title.ZIndex = 3
+title.Parent = titleBar
+
+-- ฟังก์ชันสำหรับระบบลาก (Drag System)
+local function makeDraggable(guiElement, targetElement)
+	local dragging = false
+	local dragInput
+	local dragStart
+	local startPos
+
+	guiElement.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = targetElement.Position
+
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
+				end
+			end)
+		end
+	end)
+
+	guiElement.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			dragInput = input
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if input == dragInput and dragging then
+			local delta = input.Position - dragStart
+			targetElement.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+		end
+	end)
+end
+
+makeDraggable(titleBar, mainFrame)
+makeDraggable(title, mainFrame)
+
+-- ส่วนประกอบเนื้อหา (ต้องตั้ง ZIndex ให้สูงกว่า 0)
+local soundFrame = Instance.new("Frame")
+soundFrame.Size = UDim2.new(1, -30, 0, 135)
+soundFrame.Position = UDim2.new(0, 15, 0, 60)
+soundFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 55)
+soundFrame.BackgroundTransparency = 0.3
+soundFrame.ZIndex = 1
+soundFrame.Parent = mainFrame
+
+local sCorner = Instance.new("UICorner")
+sCorner.CornerRadius = UDim.new(0, 12)
+sCorner.Parent = soundFrame
+
+local sTitle = Instance.new("TextLabel")
+sTitle.Size = UDim2.new(1, 0, 0, 30)
+sTitle.BackgroundTransparency = 1
+sTitle.Text = "⚡ ปรับแต่งเสียง"
+sTitle.TextColor3 = Color3.fromRGB(0, 255, 220)
+sTitle.TextSize = 16
+sTitle.Font = Enum.Font.GothamBold
+sTitle.ZIndex = 2
+sTitle.Parent = soundFrame
+
+local currentVolume = 1.8
+local currentPitch = 1.0
+
+-- Volume Slider
+local volBar = Instance.new("Frame")
+volBar.Size = UDim2.new(1, -30, 0, 10)
+volBar.Position = UDim2.new(0, 15, 0, 58)
+volBar.BackgroundColor3 = Color3.fromRGB(45, 45, 75)
+volBar.ZIndex = 2
+volBar.Parent = soundFrame
+
+local volFill = Instance.new("Frame")
+volFill.Size = UDim2.new(0.8, 0, 1, 0)
+volFill.BackgroundColor3 = Color3.fromRGB(0, 255, 200)
+volFill.ZIndex = 3
+volFill.Parent = volBar
+
+local volText = Instance.new("TextLabel")
+volText.Size = UDim2.new(0, 50, 0, 20)
+volText.Position = UDim2.new(1, -55, 0, 53)
+volText.BackgroundTransparency = 1
+volText.Text = "180%"
+volText.TextColor3 = Color3.fromRGB(0, 255, 220)
+volText.TextSize = 14
+volText.Font = Enum.Font.GothamBold
+volText.ZIndex = 3
+volText.Parent = soundFrame
+
+-- Pitch Slider
+local pitchBar = Instance.new("Frame")
+pitchBar.Size = UDim2.new(1, -30, 0, 10)
+pitchBar.Position = UDim2.new(0, 15, 0, 103)
+pitchBar.BackgroundColor3 = Color3.fromRGB(45, 45, 75)
+pitchBar.ZIndex = 2
+pitchBar.Parent = soundFrame
+
+local pitchFill = Instance.new("Frame")
+pitchFill.Size = UDim2.new(0.5, 0, 1, 0)
+pitchFill.BackgroundColor3 = Color3.fromRGB(255, 160, 0)
+pitchFill.ZIndex = 3
+pitchFill.Parent = pitchBar
+
+local pitchText = Instance.new("TextLabel")
+pitchText.Size = UDim2.new(0, 50, 0, 20)
+pitchText.Position = UDim2.new(1, -55, 0, 98)
+pitchText.BackgroundTransparency = 1
+pitchText.Text = "1.00x"
+pitchText.TextColor3 = Color3.fromRGB(255, 200, 80)
+pitchText.TextSize = 14
+pitchText.Font = Enum.Font.GothamBold
+pitchText.ZIndex = 3
+pitchText.Parent = soundFrame
+
+-- Slider Logic
+local volDragging = false
+volBar.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then volDragging = true end
+end)
+UserInputService.InputChanged:Connect(function(input)
+	if volDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+		local percent = math.clamp((input.Position.X - volBar.AbsolutePosition.X) / volBar.AbsoluteSize.X, 0, 1)
+		volFill.Size = UDim2.new(percent, 0, 1, 0)
+		currentVolume = percent * 2
+		volText.Text = math.floor(percent * 200) .. "%"
+	end
+end)
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then volDragging = false end
+end)
+
+local pitchDragging = false
+pitchBar.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then pitchDragging = true end
+end)
+UserInputService.InputChanged:Connect(function(input)
+	if pitchDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+		local percent = math.clamp((input.Position.X - pitchBar.AbsolutePosition.X) / pitchBar.AbsoluteSize.X, 0, 1)
+		pitchFill.Size = UDim2.new(percent, 0, 1, 0)
+		currentPitch = 0.5 + (percent * 1.5)
+		pitchText.Text = string.format("%.2f x", currentPitch)
+	end
+end)
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then pitchDragging = false end
+end)
+
+-- ช่องใส่ ID
+local inputFrame = Instance.new("Frame")
+inputFrame.Size = UDim2.new(1, -30, 0, 45)
+inputFrame.Position = UDim2.new(0, 15, 0, 205)
+inputFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 55)
+inputFrame.BackgroundTransparency = 0.3
+inputFrame.ZIndex = 1
+inputFrame.Parent = mainFrame
+
+local textbox = Instance.new("TextBox")
+textbox.Size = UDim2.new(0.65, -5, 1, -10)
+textbox.Position = UDim2.new(0, 10, 0, 5)
+textbox.PlaceholderText = "ใส่ ID เพลงที่นี่"
+textbox.Text = ""
+textbox.BackgroundTransparency = 1
+textbox.TextColor3 = Color3.fromRGB(255, 255, 255)
+textbox.TextSize = 14
+textbox.Font = Enum.Font.Gotham
+textbox.ZIndex = 2
+textbox.Parent = inputFrame
+
+local addBtn = Instance.new("TextButton")
+addBtn.Size = UDim2.new(0.35, -10, 1, -10)
+addBtn.Position = UDim2.new(0.65, 5, 0, 5)
+addBtn.BackgroundColor3 = Color3.fromRGB(130, 60, 255)
+addBtn.Text = "➕ เพิ่ม"
+addBtn.TextColor3 = Color3.new(1,1,1)
+addBtn.TextSize = 15
+addBtn.Font = Enum.Font.GothamBold
+addBtn.ZIndex = 2
+addBtn.Parent = inputFrame
+
+-- รายการเพลง
+local scroll = Instance.new("ScrollingFrame")
+scroll.Size = UDim2.new(1, -30, 0, 110)
+scroll.Position = UDim2.new(0, 15, 0, 260)
+scroll.BackgroundTransparency = 1
+scroll.ScrollBarThickness = 6
+scroll.ZIndex = 1
+scroll.Parent = mainFrame
+
+local listLayout = Instance.new("UIListLayout")
+listLayout.Padding = UDim.new(0, 6)
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+listLayout.Parent = scroll
+
+local songs = {}
+
+local function createSongItem(id)
+	local item = Instance.new("Frame")
+	item.Size = UDim2.new(1, -8, 0, 40)
+	item.BackgroundColor3 = Color3.fromRGB(30, 30, 60)
+	item.BackgroundTransparency = 0.2
+	item.ZIndex = 2
+	item.Parent = scroll
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(0.55, 0, 1, 0)
+	label.Position = UDim2.new(0, 10, 0, 0)
+	label.BackgroundTransparency = 1
+	label.Text = "🎵 " .. id
+	label.TextColor3 = Color3.fromRGB(200, 255, 255)
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Font = Enum.Font.Gotham
+	label.TextSize = 14
+	label.ZIndex = 3
+	label.Parent = item
+
+	local playBtn = Instance.new("TextButton")
+	playBtn.Size = UDim2.new(0, 70, 0, 30)
+	playBtn.Position = UDim2.new(0.58, 0, 0.5, -15)
+	playBtn.BackgroundColor3 = Color3.fromRGB(0, 255, 180)
+	playBtn.Text = "▶ PLAY"
+	playBtn.TextColor3 = Color3.new(0,0,0)
+	playBtn.Font = Enum.Font.GothamBold
+	playBtn.TextSize = 13
+	playBtn.ZIndex = 3
+	playBtn.Parent = item
+
+	local delBtn = Instance.new("TextButton")
+	delBtn.Size = UDim2.new(0, 30, 0, 30)
+	delBtn.Position = UDim2.new(1, -35, 0.5, -15)
+	delBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 150)
+	delBtn.Text = "✕"
+	delBtn.TextColor3 = Color3.new(1,1,1)
+	delBtn.Font = Enum.Font.GothamBold
+	delBtn.TextSize = 16
+	delBtn.ZIndex = 3
+	delBtn.Parent = item
+
+	playBtn.MouseButton1Click:Connect(function()
+		pcall(function() ReplicatedStorage.RE["1NoMoto1rVehicle1s"]:FireServer("PickingScooterMusicText", id, true, currentVolume, currentPitch) end)
+		pcall(function() ReplicatedStorage.RE.PlayerToolEvent:FireServer("ToolMusicText", id, true, currentVolume, currentPitch) end)
+	end)
+
+	delBtn.MouseButton1Click:Connect(function()
+		item:Destroy()
+		for i, v in ipairs(songs) do
+			if v == id then table.remove(songs, i) break end
+		end
+	end)
+end
+
+addBtn.MouseButton1Click:Connect(function()
+	local id = textbox.Text:match("%d+")
+	if id and id ~= "" then
+		table.insert(songs, id)
+		createSongItem(id)
+		textbox.Text = ""
+		scroll.CanvasSize = UDim2.new(0,0,0,listLayout.AbsoluteContentSize.Y + 10)
+	end
+end)
+
+-- ปุ่มด้านล่าง
+local clearAll = Instance.new("TextButton")
+clearAll.Size = UDim2.new(1, -30, 0, 35)
+clearAll.Position = UDim2.new(0, 15, 1, -95)
+clearAll.BackgroundColor3 = Color3.fromRGB(90, 90, 120)
+clearAll.Text = "🗑️ ล้างรายการทั้งหมด"
+clearAll.TextColor3 = Color3.new(1,1,1)
+clearAll.TextSize = 15
+clearAll.Font = Enum.Font.GothamBold
+clearAll.ZIndex = 2
+clearAll.Parent = mainFrame
+
+local playAll = Instance.new("TextButton")
+playAll.Size = UDim2.new(0.48, -7, 0, 45)
+playAll.Position = UDim2.new(0, 15, 1, -55)
+playAll.BackgroundColor3 = Color3.fromRGB(0, 255, 180)
+playAll.Text = "▶ เปิดทั้งหมด"
+playAll.TextColor3 = Color3.new(0,0,0)
+playAll.TextSize = 15
+playAll.Font = Enum.Font.GothamBlack
+playAll.ZIndex = 2
+playAll.Parent = mainFrame
+
+local stopAll = Instance.new("TextButton")
+stopAll.Size = UDim2.new(0.48, -7, 0, 45)
+stopAll.Position = UDim2.new(0.5, 7, 1, -55)
+stopAll.BackgroundColor3 = Color3.fromRGB(255, 50, 150)
+stopAll.Text = "❌ ห้ามกด"
+stopAll.TextColor3 = Color3.new(1,1,1)
+stopAll.TextSize = 15
+stopAll.Font = Enum.Font.GothamBlack
+stopAll.ZIndex = 2
+stopAll.Parent = mainFrame
+
+playAll.MouseButton1Click:Connect(function()
+	for _, id in ipairs(songs) do
+		pcall(function() ReplicatedStorage.RE["1NoMoto1rVehicle1s"]:FireServer("PickingScooterMusicText", id, true, currentVolume, currentPitch) end)
+		pcall(function() ReplicatedStorage.RE.PlayerToolEvent:FireServer("ToolMusicText", id, true, currentVolume, currentPitch) end)
+	end
+end)
+
+stopAll.MouseButton1Click:Connect(function()
+	for _, id in ipairs(songs) do
+		pcall(function() ReplicatedStorage.RE["1NoMoto1rVehicle1s"]:FireServer("PickingScooterMusicText", id, false) end)
+		pcall(function() ReplicatedStorage.RE.PlayerToolEvent:FireServer("ToolMusicText", id, false) end)
+	end
+end)
+
+clearAll.MouseButton1Click:Connect(function()
+	for _, child in pairs(scroll:GetChildren()) do
+		if child:IsA("Frame") then child:Destroy() end
+	end
+	songs = {}
+	scroll.CanvasSize = UDim2.new(0,0,0,0)
+end)
+
+-- Toggle ย่อ/ขยายหน้าต่าง (และทำให้ลากได้)
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 50, 0, 50)
+toggleBtn.Position = UDim2.new(0, 20, 0, 20)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 255, 200)
+toggleBtn.Text = "🌌"
+toggleBtn.TextSize = 25
+toggleBtn.Parent = screenGui
+
+local tCorner = Instance.new("UICorner")
+tCorner.CornerRadius = UDim.new(1, 0)
+tCorner.Parent = toggleBtn
+
+local tStroke = Instance.new("UIStroke")
+tStroke.Color = Color3.fromRGB(160, 50, 255)
+tStroke.Thickness = 3
+tStroke.Parent = toggleBtn
+
+-- ทำให้ปุ่มเปิด-ปิดลากได้
+makeDraggable(toggleBtn, toggleBtn)
+
+local open = true
+local lastPos = toggleBtn.Position
+
+toggleBtn.MouseButton1Click:Connect(function()
+	local currentPos = toggleBtn.Position
+	local dist = (Vector2.new(currentPos.X.Offset, currentPos.Y.Offset) - Vector2.new(lastPos.X.Offset, lastPos.Y.Offset)).Magnitude
+	
+	if dist < 5 then
+		open = not open
+		mainFrame.Visible = open
+	end
+	lastPos = currentPos
+end)
+
+toggleBtn.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		lastPos = toggleBtn.Position
+	end
+end)
+
+print("🌌 NEON MUSIC X โหลดสำเร็จ - เพิ่มรูปพื้นหลังสวยๆ แล้ว!")
